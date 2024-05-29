@@ -1,13 +1,9 @@
 package command
 
 import (
-	"context"
 	"fmt"
+	"prcrastinate/internal/github"
 	"prcrastinate/internal/platform"
-	"time"
-
-	"github.com/shurcooL/githubv4"
-	"golang.org/x/oauth2"
 )
 
 type Pull struct{}
@@ -33,93 +29,19 @@ func (cmd Pull) Run(args []string) {
 	baseFlags := InitBaseFlags(&parsedArgs.BaseArgs)
 	baseFlags.Parse(args)
 	config := platform.ReadConfigFromPath(parsedArgs.ConfigPath)
+	client := github.GetClient(config.Token)
 
-	authSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.Token})
-	// provided context determines the valid lifetime for the client
-	httpClient := oauth2.NewClient(context.Background(), authSource)
-	// TODO: determine if we need to switch endpoints for GH enterprise cloud
-	ghClient := githubv4.NewClient(httpClient)
-
-	var query struct {
-		Viewer struct {
-			Login     githubv4.String
-			CreatedAt githubv4.DateTime
-		}
-	}
-
-	userFetchCtx, userFetchCancel := context.WithTimeout(context.Background(), time.Second * 5)
-	err := ghClient.Query(userFetchCtx, &query, nil)
-	if err != nil {
-		userFetchCancel()
-		platform.FailOut(fmt.Sprintf("Failed to query Github: %s", err.Error()))
-	}
-
-	fmt.Printf("==DEBUG== SUCCESS! username: %s\n", query.Viewer.Login)
-	userFetchCancel()
-
-	// TODO: fetch relevant PRs
-	// TODO: make this query type declaration a little more sane
-	var prQuery struct {
-		Search struct {
-			PageInfo struct {
-				StartCursor string
-				HasNextPage bool
-			}
-			IssueCount int32
-			Edges []struct{
-				Node struct {
-					PullRequest struct {
-						Number int32
-						Title string
-						Author struct { // TODO: probably define this as a reusable type
-							Login string
-						}
-						CreatedAt time.Time
-						UpdatedAt time.Time
-						Repository struct {
-							Owner struct {
-								Login string
-							}
-							Name string
-						}
-						Reviews struct {
-							Nodes []struct {
-								Id string
-								Url string
-								PublishedAt time.Time
-								UpdatedAt time.Time
-								State string
-								Author struct {
-									Login string
-								}
-								ViewerDidAuthor bool
-								BodyText string
-								Comments struct {
-									TotalCount int
-								}
-							}
-						} `graphql:"reviews(first: 50)"`
-					} `graphql:"... on PullRequest"`
-				}
-			}
-		} `graphql:"search(query: $search_str, type: ISSUE, first: 50, after: $curr_cursor)"`
-	}
-
-	prArgs := map[string]interface{} {
-		// TODO: parameterize the username here
-		"search_str": githubv4.String("type:pr state:closed author:lorentzforces"),
-		"curr_cursor": githubv4.String(""),
-	}
-
-	reqCtx, cancelFunc := context.WithTimeout(context.Background(), time.Second * 5)
-	defer cancelFunc()
-	err = ghClient.Query(reqCtx, &prQuery, prArgs)
+	user, err := client.FetchUser()
 	if err != nil {
 		platform.FailOut(err.Error())
 	}
+	fmt.Printf("==DEBUG== SUCCESS! username: %s\n", user.Name)
 
-	fmt.Printf("==DEBUG== SUCCESS! PR count: %d\n", prQuery.Search.IssueCount)
-	fmt.Printf("%+v\n", prQuery)
+	prData, err:= client.FetchPrData(user.Name)
+	if err != nil {
+		platform.FailOut(err.Error())
+	}
+	fmt.Printf("==DEBUG== SUCCESS! PR count: %d\n", prData.PrCount)
 
 	// TODO: refresh local db
 	// TODO: print stats?

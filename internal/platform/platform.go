@@ -1,10 +1,12 @@
 package platform
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/user"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -120,4 +122,18 @@ func replaceTilde(s string) string {
 		s = strings.Replace(s, "~", usr.HomeDir, 1)
 	}
 	return s
+}
+
+func ValidateConfig(config *Config) error {
+	var errs []error
+	if emptyToken, _ := regexp.MatchString(`^\s*$`, config.Token); emptyToken {
+		errs = append(errs, fmt.Errorf("No valid token value provided"))
+	}
+
+	// TODO: validate the rest
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.Join(errs...)
 }
