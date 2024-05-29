@@ -3,6 +3,9 @@
 prcr
 !cmd/prcr/
 
+# config file contains secrets
+dev-config.toml
+
 ## Linux ##
 
 *~
