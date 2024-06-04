@@ -32,9 +32,14 @@ func (cmd GenerateConfig) Run(args []string) {
 	baseFlags := InitBaseFlags(&parsedArgs.BaseArgs)
 	baseFlags.Parse(args)
 
+	givenPath := platform.GetConfigEnvVarPath()
+	if len(givenPath) == 0 {
+		givenPath = parsedArgs.ConfigPath
+	}
+
 	// Error usually means that we didn't find the file. If something will prevent us writing the
 	// file, we'll encounter that later anyway.
-	configPath, foundFile, _  := platform.GetConfigPath(parsedArgs.ConfigPath)
+	configPath, foundFile, _  := platform.GetDefaultablePath(givenPath, platform.DefaultConfigPath)
 	if foundFile {
 		platform.FailOut(fmt.Sprintf("Resolved config file path already exists: %s", configPath))
 	}

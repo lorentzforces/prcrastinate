@@ -16,7 +16,7 @@ build: clean prcr
 .PHONY: build
 
 prcr:
-> go build ./cmd/prcr
+> CGO_ENABLED=1 go build ./cmd/prcr
 
 clean:
 > rm -f ./prcr
